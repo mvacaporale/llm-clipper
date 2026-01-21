@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Python (for generate_icons.py)
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Build artifacts
+*.zip

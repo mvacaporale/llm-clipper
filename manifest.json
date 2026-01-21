@@ -1,0 +1,61 @@
+{
+  "manifest_version": 3,
+  "name": "LLM Clipper",
+  "version": "1.0.0",
+  "description": "Highlight and export text from ChatGPT, Claude, and Gemini to Notion",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://chat.openai.com/*",
+    "https://chatgpt.com/*",
+    "https://claude.ai/*",
+    "https://gemini.google.com/*",
+    "https://api.notion.com/*",
+    "https://*/*",
+    "http://*/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-inactive-16.png",
+      "48": "icons/icon-inactive-48.png",
+      "128": "icons/icon-inactive-128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon-inactive-16.png",
+    "48": "icons/icon-inactive-48.png",
+    "128": "icons/icon-inactive-128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chat.openai.com/*",
+        "https://chatgpt.com/*",
+        "https://claude.ai/*",
+        "https://gemini.google.com/*"
+      ],
+      "js": ["content.js"],
+      "css": ["styles.css"]
+    }
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "commands": {
+    "toggle-highlight-mode": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+H",
+        "mac": "Command+Shift+H"
+      },
+      "description": "Toggle highlight mode on/off"
+    }
+  }
+}

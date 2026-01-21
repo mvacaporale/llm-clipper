@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Clipper Settings</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      padding: 32px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .header img {
+      width: 48px;
+      height: 48px;
+    }
+
+    .header h1 {
+      font-size: 24px;
+      font-weight: 600;
+      color: #111;
+    }
+
+    .header p {
+      font-size: 14px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+
+    .section {
+      margin-bottom: 24px;
+    }
+
+    .section-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #111;
+      margin-bottom: 8px;
+    }
+
+    .section-description {
+      font-size: 14px;
+      color: #6b7280;
+      margin-bottom: 16px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      color: #374151;
+      margin-bottom: 6px;
+    }
+
+    input[type="text"],
+    input[type="password"] {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    input[type="text"]:focus,
+    input[type="password"]:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    .help-text {
+      font-size: 12px;
+      color: #9ca3af;
+      margin-top: 6px;
+    }
+
+    .help-text a {
+      color: #2563eb;
+      text-decoration: none;
+    }
+
+    .help-text a:hover {
+      text-decoration: underline;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .btn-primary {
+      background: #2563eb;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #1d4ed8;
+    }
+
+    .btn-secondary {
+      background: #e5e7eb;
+      color: #374151;
+      margin-left: 8px;
+    }
+
+    .btn-secondary:hover {
+      background: #d1d5db;
+    }
+
+    .message {
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+
+    .message.success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+
+    .message.error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .instructions {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 24px;
+    }
+
+    .instructions h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .instructions ol {
+      padding-left: 20px;
+      font-size: 13px;
+      color: #4b5563;
+    }
+
+    .instructions li {
+      margin-bottom: 8px;
+    }
+
+    .instructions code {
+      background: #e5e7eb;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <img src="icons/icon-active-48.png" alt="LLM Clipper">
+      <div>
+        <h1>LLM Clipper Settings</h1>
+        <p>Configure your Notion integration</p>
+      </div>
+    </div>
+
+    <div id="message" class="message hidden"></div>
+
+    <form id="settingsForm">
+      <div class="section">
+        <div class="section-title">Notion Configuration</div>
+        <div class="section-description">
+          Connect LLM Clipper to your Notion workspace to save highlights.
+        </div>
+
+        <div class="form-group">
+          <label for="notionApiKey">Notion API Key</label>
+          <input type="password" id="notionApiKey" placeholder="secret_xxxxxxxxxxxxx">
+          <div class="help-text">
+            Get your API key from
+            <a href="https://www.notion.so/my-integrations" target="_blank">Notion Integrations</a>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="notionParentPageId">Parent Page ID</label>
+          <input type="text" id="notionParentPageId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+          <div class="help-text">
+            The ID of the Notion page where highlights will be saved as sub-pages.
+            Find it in the page URL after the page title.
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <button type="submit" class="btn btn-primary">Save Settings</button>
+        <button type="button" class="btn btn-secondary" id="testBtn">Test Connection</button>
+      </div>
+    </form>
+
+    <div class="instructions">
+      <h3>Setup Instructions</h3>
+      <ol>
+        <li>Go to <a href="https://www.notion.so/my-integrations" target="_blank">Notion Integrations</a> and create a new integration</li>
+        <li>Give it a name (e.g., "LLM Clipper") and select your workspace</li>
+        <li>Copy the <strong>Internal Integration Token</strong> (starts with <code>secret_</code>)</li>
+        <li>Create or choose a Notion page to store your highlights</li>
+        <li>Click the <strong>...</strong> menu on that page and select "Add connections" → add your integration</li>
+        <li>Copy the page ID from the URL (the string after the page title, before the <code>?</code>)</li>
+        <li>Paste both values above and save</li>
+      </ol>
+    </div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>

@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Clipper</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      width: 240px;
+      padding: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 13px;
+      color: #333;
+    }
+
+    .status {
+      text-align: center;
+      padding: 8px;
+      color: #666;
+    }
+
+    .notion-link {
+      display: block;
+      padding: 10px 12px;
+      background: #000;
+      color: #fff;
+      text-decoration: none;
+      text-align: center;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+
+    .notion-link:hover {
+      background: #333;
+    }
+
+    .error {
+      color: #dc2626;
+      text-align: center;
+      padding: 8px;
+    }
+
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px;
+    }
+
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid #e5e5e5;
+      border-top: 2px solid #666;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .read-with-llm {
+      text-align: center;
+    }
+
+    .read-with-llm h3 {
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 12px;
+      color: #333;
+    }
+
+    .llm-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .llm-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .llm-btn:hover {
+      opacity: 0.9;
+    }
+
+    .llm-btn.gemini {
+      background: #4285f4;
+      color: #fff;
+    }
+
+    .llm-btn.claude {
+      background: #d97706;
+      color: #fff;
+    }
+
+    .llm-btn.chatgpt {
+      background: #10a37f;
+      color: #fff;
+    }
+
+    .llm-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    /* Export UI styles */
+    .export-ui {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .highlight-count {
+      text-align: center;
+      font-size: 13px;
+      color: #666;
+    }
+
+    .highlight-count strong {
+      color: #333;
+    }
+
+    .page-name-input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: inherit;
+    }
+
+    .page-name-input:focus {
+      outline: none;
+      border-color: #666;
+    }
+
+    .export-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .export-btn {
+      flex: 1;
+      padding: 10px 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .export-btn.save {
+      background: #000;
+      color: #fff;
+    }
+
+    .export-btn.save:hover {
+      background: #333;
+    }
+
+    .export-btn.cancel {
+      background: #f0f0f0;
+      color: #333;
+    }
+
+    .export-btn.cancel:hover {
+      background: #e0e0e0;
+    }
+
+    .export-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    /* Page search styles */
+    .page-search-section {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .page-search-section label {
+      font-size: 11px;
+      color: #666;
+      font-weight: 500;
+    }
+
+    .search-input-wrapper {
+      position: relative;
+    }
+
+    .page-search-input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: inherit;
+      background: #fff;
+    }
+
+    .page-search-input:focus {
+      outline: none;
+      border-color: #666;
+    }
+
+    .page-results {
+      max-height: 150px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #fff;
+    }
+
+    .page-results:empty {
+      display: none;
+    }
+
+    .page-result-item {
+      padding: 8px 10px;
+      cursor: pointer;
+      border-bottom: 1px solid #eee;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .page-result-item:last-child {
+      border-bottom: none;
+    }
+
+    .page-result-item:hover {
+      background: #f5f5f5;
+    }
+
+    .page-result-item.selected {
+      background: #e8e8e8;
+    }
+
+    .page-result-item.new-page {
+      font-weight: 500;
+      color: #333;
+    }
+
+    .page-icon {
+      flex-shrink: 0;
+    }
+
+    .page-title {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .selected-page {
+      padding: 8px 10px;
+      background: #f0f0f0;
+      border-radius: 6px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .selected-page .page-title {
+      flex: 1;
+    }
+
+    .selected-page .clear-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      color: #666;
+      padding: 0 4px;
+    }
+
+    .selected-page .clear-btn:hover {
+      color: #333;
+    }
+
+    .new-page-section {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .new-page-section label {
+      font-size: 11px;
+      color: #666;
+      font-weight: 500;
+    }
+
+    .new-page-section.hidden {
+      display: none;
+    }
+
+    .searching-indicator {
+      font-size: 11px;
+      color: #999;
+      text-align: center;
+      padding: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div id="content">
+    <div class="loading">
+      <div class="spinner"></div>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
