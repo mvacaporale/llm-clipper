@@ -114,6 +114,21 @@ When clicking extension on non-LLM pages:
 4. Opens LLM in new tab
 5. Content script detects pending content and pastes into input
 
+### YouTube Support
+
+For YouTube videos (`youtube.com/watch` or `youtu.be/`):
+1. Extracts transcript from `ytInitialPlayerResponse` embedded in page
+2. Fetches caption track JSON (`baseUrl + '&fmt=json3'`)
+3. Parses transcript events and joins text segments
+4. Falls back to video description if no transcript available
+5. Uses YouTube-specific prompt mentioning "transcript" vs "article"
+
+Key functions in `popup.js`:
+- `isYouTubeVideo(url)` - Detects YouTube URLs
+- `extractYouTubeTranscript(tabId)` - Extracts transcript from page data
+
+### Regular Pages
+
 Content extraction selectors (in order):
 - `article`, `[role="article"]`, `.article-content`, `.post-content`, `.entry-content`, `main`, `.content`
 - Fallback: `document.body.innerText`

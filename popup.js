@@ -268,7 +268,109 @@ function renderReadWithLLM(tab) {
   });
 }
 
-async function extractPageContent(tabId) {
+// Check if URL is a YouTube video
+function isYouTubeVideo(url) {
+  return url && (
+    url.includes('youtube.com/watch') ||
+    url.includes('youtu.be/')
+  );
+}
+
+// Extract YouTube transcript from page
+async function extractYouTubeTranscript(tabId) {
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: tabId },
+      func: async () => {
+        const title = document.title || '';
+        const url = window.location.href;
+
+        // Try to find caption tracks in the page data
+        try {
+          // YouTube embeds player data in ytInitialPlayerResponse
+          const scripts = document.querySelectorAll('script');
+          let playerResponse = null;
+
+          for (const script of scripts) {
+            const text = script.textContent;
+            if (text && text.includes('ytInitialPlayerResponse')) {
+              const match = text.match(/ytInitialPlayerResponse\s*=\s*({.+?});/s);
+              if (match) {
+                playerResponse = JSON.parse(match[1]);
+                break;
+              }
+            }
+          }
+
+          // Also try window object
+          if (!playerResponse && window.ytInitialPlayerResponse) {
+            playerResponse = window.ytInitialPlayerResponse;
+          }
+
+          if (playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks) {
+            const tracks = playerResponse.captions.playerCaptionsTracklistRenderer.captionTracks;
+
+            // Prefer English, fall back to first available
+            let track = tracks.find(t => t.languageCode === 'en') || tracks[0];
+
+            if (track?.baseUrl) {
+              // Fetch the transcript
+              const response = await fetch(track.baseUrl + '&fmt=json3');
+              const data = await response.json();
+
+              if (data.events) {
+                // Extract text from transcript events
+                const transcript = data.events
+                  .filter(e => e.segs)
+                  .map(e => e.segs.map(s => s.utf8).join(''))
+                  .join(' ')
+                  .replace(/\s+/g, ' ')
+                  .trim();
+
+                if (transcript) {
+                  return {
+                    title,
+                    content: transcript,
+                    url,
+                    isYouTube: true,
+                    hasTranscript: true
+                  };
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.log('Failed to extract YouTube transcript:', e);
+        }
+
+        // Fallback: return video description and metadata
+        const description = document.querySelector('#description-inline-expander')?.innerText ||
+                          document.querySelector('#description')?.innerText ||
+                          '';
+
+        return {
+          title,
+          content: description || '[No transcript available - video description only]',
+          url,
+          isYouTube: true,
+          hasTranscript: false
+        };
+      }
+    });
+
+    return results[0]?.result || null;
+  } catch (error) {
+    console.error('Failed to extract YouTube content:', error);
+    return null;
+  }
+}
+
+async function extractPageContent(tabId, url) {
+  // Check if it's a YouTube video
+  if (isYouTubeVideo(url)) {
+    return await extractYouTubeTranscript(tabId);
+  }
+
   try {
     const results = await chrome.scripting.executeScript({
       target: { tabId: tabId },
@@ -330,16 +432,43 @@ async function handleLLMSelect(llm, tab) {
     selectedBtn.innerHTML = '<div class="spinner" style="width:12px;height:12px;border-width:2px;"></div>';
   }
 
-  // Extract page content
-  const pageData = await extractPageContent(tab.id);
+  // Extract page content (pass URL for YouTube detection)
+  const pageData = await extractPageContent(tab.id, tab.url);
 
   if (!pageData) {
     renderError('Failed to extract page content');
     return;
   }
 
-  // Build the prompt
-  const prompt = `Please read and analyze this article, then be ready to answer my questions about it.
+  // Build the prompt based on content type
+  let prompt;
+
+  if (pageData.isYouTube) {
+    if (pageData.hasTranscript) {
+      prompt = `Please read and analyze this YouTube video transcript, then be ready to answer my questions about it.
+
+Title: ${pageData.title}
+URL: ${pageData.url}
+
+---
+TRANSCRIPT:
+${pageData.content}
+---
+
+I've shared this video transcript with you. Please confirm you've read it and let me know you're ready for my questions.`;
+    } else {
+      prompt = `I wanted to share a YouTube video with you, but I couldn't extract the transcript.
+
+Title: ${pageData.title}
+URL: ${pageData.url}
+
+Video Description:
+${pageData.content}
+
+Unfortunately, this video doesn't have an available transcript. You can see the description above. Let me know if you'd like me to describe what the video is about, or if you have any questions based on the description.`;
+    }
+  } else {
+    prompt = `Please read and analyze this article, then be ready to answer my questions about it.
 
 Title: ${pageData.title}
 URL: ${pageData.url}
@@ -349,6 +478,7 @@ ${pageData.content}
 ---
 
 I've shared this article with you. Please confirm you've read it and let me know you're ready for my questions.`;
+  }
 
   // Store content for the LLM page to retrieve
   await chrome.storage.local.set({
