@@ -4,6 +4,7 @@
 let isHighlightModeActive = false;
 let highlightRanges = [];
 let clipperHighlight = null;
+let storedHighlightData = []; // Store text content for range restoration
 
 // Initialize CSS Custom Highlight API if available
 function initHighlightAPI() {
@@ -18,16 +19,28 @@ function initHighlightAPI() {
 }
 
 // Add a range to the persistent highlights
-function addHighlightRange(range) {
+function addHighlightRange(range, text) {
   try {
     if (clipperHighlight) {
       const clonedRange = range.cloneRange();
       highlightRanges.push(clonedRange);
       clipperHighlight.add(clonedRange);
+      // Store text for restoration after resize
+      storedHighlightData.push({
+        text: text || range.toString(),
+        startOffset: getTextOffset(range.startContainer, range.startOffset),
+        endOffset: getTextOffset(range.endContainer, range.endOffset)
+      });
     }
   } catch (e) {
     // Ignore errors from invalid ranges
   }
+}
+
+// Get a stable text offset for range restoration
+function getTextOffset(node, offset) {
+  // Simple approach: store the text content for matching
+  return { text: node.textContent, offset };
 }
 
 // Clear all persistent highlights
@@ -40,7 +53,8 @@ function clearAllHighlights() {
     // Ignore
   }
   highlightRanges = [];
-  hideFloatingDelete();
+  storedHighlightData = [];
+  hideFloatingButtons();
 }
 
 // Remove a specific highlight by index
@@ -54,8 +68,9 @@ function removeHighlight(index) {
     }
   }
 
-  // Remove from local array
+  // Remove from local arrays
   highlightRanges.splice(index, 1);
+  storedHighlightData.splice(index, 1);
 
   // Tell background to remove it
   chrome.runtime.sendMessage({
@@ -108,8 +123,9 @@ function removeHighlights(indices) {
         // Ignore
       }
     }
-    // Remove from local array
+    // Remove from local arrays
     highlightRanges.splice(index, 1);
+    storedHighlightData.splice(index, 1);
   }
 
   // Tell background to remove them
@@ -122,55 +138,89 @@ function removeHighlights(indices) {
 }
 
 
-// Floating delete button for highlights
+// Floating buttons (copy + delete) for highlights
+let floatingButtonContainer = null;
+let floatingCopyBtn = null;
 let floatingDeleteBtn = null;
 let currentHoverIndex = -1;
-let isOverDeleteBtn = false;
+let isOverButtons = false;
 
-function createFloatingDeleteBtn() {
-  if (floatingDeleteBtn) return;
+function createFloatingButtons() {
+  if (floatingButtonContainer) return;
 
+  floatingButtonContainer = document.createElement('div');
+  floatingButtonContainer.className = 'llm-clipper-floating-buttons';
+  floatingButtonContainer.style.display = 'none';
+
+  // Copy button
+  floatingCopyBtn = document.createElement('button');
+  floatingCopyBtn.className = 'llm-clipper-floating-btn llm-clipper-floating-copy';
+  floatingCopyBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
+  floatingCopyBtn.title = 'Copy';
+
+  // Delete button
   floatingDeleteBtn = document.createElement('button');
-  floatingDeleteBtn.className = 'llm-clipper-floating-delete';
+  floatingDeleteBtn.className = 'llm-clipper-floating-btn llm-clipper-floating-delete';
   floatingDeleteBtn.innerHTML = '✕';
-  floatingDeleteBtn.style.display = 'none';
-  document.body.appendChild(floatingDeleteBtn);
+  floatingDeleteBtn.title = 'Remove';
+
+  floatingButtonContainer.appendChild(floatingDeleteBtn);
+  floatingButtonContainer.appendChild(floatingCopyBtn);
+  document.body.appendChild(floatingButtonContainer);
+
+  floatingCopyBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (currentHoverIndex >= 0 && storedHighlightData[currentHoverIndex]) {
+      const text = storedHighlightData[currentHoverIndex].text;
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('Copied to clipboard', 1500);
+      }).catch(() => {
+        showToast('Failed to copy', 1500);
+      });
+    }
+  });
 
   floatingDeleteBtn.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
     if (currentHoverIndex >= 0) {
       removeHighlight(currentHoverIndex);
-      hideFloatingDelete();
+      hideFloatingButtons();
     }
   });
 
-  // Keep button visible when hovering over it
-  floatingDeleteBtn.addEventListener('mouseenter', () => {
-    isOverDeleteBtn = true;
+  // Keep buttons visible when hovering over them
+  floatingButtonContainer.addEventListener('mouseenter', () => {
+    isOverButtons = true;
   });
 
-  floatingDeleteBtn.addEventListener('mouseleave', () => {
-    isOverDeleteBtn = false;
-    hideFloatingDelete();
+  floatingButtonContainer.addEventListener('mouseleave', () => {
+    isOverButtons = false;
+    hideFloatingButtons();
   });
 }
 
-function showFloatingDelete(x, y, index) {
-  if (!floatingDeleteBtn) createFloatingDeleteBtn();
+function showFloatingButtons(x, y, index) {
+  if (!floatingButtonContainer) createFloatingButtons();
 
   currentHoverIndex = index;
-  floatingDeleteBtn.style.display = 'flex';
-  floatingDeleteBtn.style.left = `${x}px`;
-  floatingDeleteBtn.style.top = `${y}px`;
+  floatingButtonContainer.style.display = 'flex';
+  floatingButtonContainer.style.left = `${x}px`;
+  floatingButtonContainer.style.top = `${y}px`;
 }
 
-function hideFloatingDelete() {
-  if (isOverDeleteBtn) return; // Don't hide if mouse is over the button
-  if (floatingDeleteBtn) {
-    floatingDeleteBtn.style.display = 'none';
+function hideFloatingButtons() {
+  if (isOverButtons) return; // Don't hide if mouse is over the buttons
+  if (floatingButtonContainer) {
+    floatingButtonContainer.style.display = 'none';
   }
   currentHoverIndex = -1;
+}
+
+// Legacy alias for compatibility
+function hideFloatingDelete() {
+  hideFloatingButtons();
 }
 
 // Check if a point is within a range
@@ -198,17 +248,17 @@ function getHighlightAtPoint(x, y) {
   return null;
 }
 
-// Handle mouse movement to show/hide delete button
+// Handle mouse movement to show/hide buttons
 let hoverTimeout = null;
 
 function handleMouseMove(e) {
   if (!isHighlightModeActive || highlightRanges.length === 0) {
-    if (!isOverDeleteBtn) hideFloatingDelete();
+    if (!isOverButtons) hideFloatingButtons();
     return;
   }
 
-  // Don't process if we're over the delete button
-  if (isOverDeleteBtn) return;
+  // Don't process if we're over the buttons
+  if (isOverButtons) return;
 
   // Debounce for performance
   if (hoverTimeout) clearTimeout(hoverTimeout);
@@ -216,23 +266,117 @@ function handleMouseMove(e) {
     const highlight = getHighlightAtPoint(e.clientX, e.clientY);
 
     if (highlight) {
-      // Get the last rect of the range to position the button
+      // Get the last rect of the range to position the buttons
       const rects = highlight.range.getClientRects();
       if (rects.length > 0) {
         const lastRect = rects[rects.length - 1];
-        showFloatingDelete(
+        showFloatingButtons(
           lastRect.right + window.scrollX + 4,
           lastRect.top + window.scrollY - 4,
           highlight.index
         );
       }
     } else {
-      hideFloatingDelete();
+      hideFloatingButtons();
     }
   }, 50);
 }
 
 document.addEventListener('mousemove', handleMouseMove);
+
+// Restore highlights after resize (Range objects can become invalid)
+let resizeTimeout = null;
+
+function restoreHighlights() {
+  if (!isHighlightModeActive || storedHighlightData.length === 0) return;
+
+  // Clear current highlight API state
+  if (clipperHighlight) {
+    clipperHighlight.clear();
+  }
+  highlightRanges = [];
+
+  // Try to restore each highlight by finding the text
+  const newHighlightRanges = [];
+
+  storedHighlightData.forEach((data) => {
+    const range = findTextInDocument(data.text);
+    if (range) {
+      newHighlightRanges.push(range);
+      if (clipperHighlight) {
+        clipperHighlight.add(range);
+      }
+    }
+  });
+
+  highlightRanges = newHighlightRanges;
+}
+
+// Find text in document and return a Range
+function findTextInDocument(searchText) {
+  if (!searchText) return null;
+
+  const treeWalker = document.createTreeWalker(
+    document.body,
+    NodeFilter.SHOW_TEXT,
+    null
+  );
+
+  let currentNode;
+  let fullText = '';
+  const textNodes = [];
+
+  // Build a map of text nodes
+  while ((currentNode = treeWalker.nextNode())) {
+    textNodes.push({
+      node: currentNode,
+      start: fullText.length,
+      end: fullText.length + currentNode.textContent.length
+    });
+    fullText += currentNode.textContent;
+  }
+
+  // Find the search text in the full text
+  const index = fullText.indexOf(searchText);
+  if (index === -1) return null;
+
+  const endIndex = index + searchText.length;
+
+  // Find which text nodes contain the start and end
+  let startNode = null, startOffset = 0;
+  let endNode = null, endOffset = 0;
+
+  for (const nodeInfo of textNodes) {
+    if (!startNode && nodeInfo.end > index) {
+      startNode = nodeInfo.node;
+      startOffset = index - nodeInfo.start;
+    }
+    if (nodeInfo.end >= endIndex) {
+      endNode = nodeInfo.node;
+      endOffset = endIndex - nodeInfo.start;
+      break;
+    }
+  }
+
+  if (!startNode || !endNode) return null;
+
+  try {
+    const range = document.createRange();
+    range.setStart(startNode, startOffset);
+    range.setEnd(endNode, endOffset);
+    return range;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Debounced resize handler
+window.addEventListener('resize', () => {
+  if (!isHighlightModeActive) return;
+
+  if (resizeTimeout) clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(restoreHighlights, 200);
+});
 
 // Detect which LLM based on hostname
 function detectLLM() {
@@ -295,12 +439,46 @@ function updateModeBadge(highlightCount) {
   // No-op - keeping function for compatibility with message handlers
 }
 
+// Check if an element is an editable area (input, textarea, contenteditable)
+function isEditableElement(element) {
+  if (!element) return false;
+
+  const tagName = element.tagName?.toLowerCase();
+  if (tagName === 'input' || tagName === 'textarea') {
+    return true;
+  }
+
+  // Check for contenteditable
+  if (element.isContentEditable) {
+    return true;
+  }
+
+  // Check parent elements for contenteditable
+  let parent = element.parentElement;
+  while (parent) {
+    if (parent.isContentEditable) {
+      return true;
+    }
+    parent = parent.parentElement;
+  }
+
+  return false;
+}
+
 // Get selected text and range without modifying DOM
 function getSelectedTextAndRange() {
   const selection = window.getSelection();
   if (!selection || selection.isCollapsed || !selection.toString().trim()) {
     return null;
   }
+
+  // Check if selection is within an editable area
+  const anchorNode = selection.anchorNode;
+  const focusNode = selection.focusNode;
+  if (isEditableElement(anchorNode?.parentElement) || isEditableElement(focusNode?.parentElement)) {
+    return null;
+  }
+
   return {
     text: selection.toString().trim(),
     range: selection.getRangeAt(0)
@@ -322,7 +500,7 @@ function handleSelection() {
     }
 
     // Add visual highlight using CSS Custom Highlight API
-    addHighlightRange(sel.range);
+    addHighlightRange(sel.range, sel.text);
 
     // Send highlight to background script for storage (include source info)
     chrome.runtime.sendMessage({

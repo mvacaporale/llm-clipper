@@ -198,14 +198,14 @@ async function appendToNotionPage(pageId, llmName, pageUrl, highlights) {
       });
     }
 
-    // Add highlight bullets for this group
+    // Add highlight bullets for this group (truncate to Notion's 2000 char limit)
     group.texts.forEach(text => {
       children.push({
         object: 'block',
         type: 'bulleted_list_item',
         bulleted_list_item: {
           rich_text: [
-            { type: 'text', text: { content: text } }
+            { type: 'text', text: { content: truncateForNotion(text) } }
           ]
         }
       });
@@ -221,24 +221,8 @@ async function appendToNotionPage(pageId, llmName, pageUrl, highlights) {
     }
   });
 
-  // Append blocks to the page
-  const response = await fetch(
-    `https://api.notion.com/v1/blocks/${pageId}/children`,
-    {
-      method: 'PATCH',
-      headers: {
-        'Authorization': `Bearer ${config.apiKey}`,
-        'Content-Type': 'application/json',
-        'Notion-Version': '2022-06-28'
-      },
-      body: JSON.stringify({ children })
-    }
-  );
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(`Notion API error: ${error.message || response.statusText}`);
-  }
+  // Append blocks to the page in batches
+  await appendBlocksInBatches(pageId, children, config.apiKey);
 
   // Get the page URL
   const pageResponse = await fetch(
@@ -284,6 +268,39 @@ function formatFullTimestamp(date) {
     second: '2-digit',
     hour12: true
   });
+}
+
+// Truncate text to Notion's 2000 character limit for rich_text
+function truncateForNotion(text, maxLength = 2000) {
+  if (!text || text.length <= maxLength) return text;
+  return text.substring(0, maxLength - 3) + '...';
+}
+
+// Append blocks to a page in batches (Notion limit: 100 blocks per request)
+async function appendBlocksInBatches(pageId, blocks, apiKey) {
+  const BATCH_SIZE = 100;
+
+  for (let i = 0; i < blocks.length; i += BATCH_SIZE) {
+    const batch = blocks.slice(i, i + BATCH_SIZE);
+
+    const response = await fetch(
+      `https://api.notion.com/v1/blocks/${pageId}/children`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'Notion-Version': '2022-06-28'
+        },
+        body: JSON.stringify({ children: batch })
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(`Notion API error: ${error.message || response.statusText}`);
+    }
+  }
 }
 
 // Group highlights by source URL
@@ -378,14 +395,14 @@ async function createNotionPage(llmName, pageUrl, highlights, customTitle = null
       });
     }
 
-    // Add highlight bullets for this group
+    // Add highlight bullets for this group (truncate to Notion's 2000 char limit)
     group.texts.forEach(text => {
       children.push({
         object: 'block',
         type: 'bulleted_list_item',
         bulleted_list_item: {
           rich_text: [
-            { type: 'text', text: { content: text } }
+            { type: 'text', text: { content: truncateForNotion(text) } }
           ]
         }
       });
@@ -401,7 +418,11 @@ async function createNotionPage(llmName, pageUrl, highlights, customTitle = null
     }
   });
 
-  // Create the page via Notion API
+  // Create the page via Notion API (with first batch of children, max 100)
+  const BATCH_SIZE = 100;
+  const firstBatch = children.slice(0, BATCH_SIZE);
+  const remainingBlocks = children.slice(BATCH_SIZE);
+
   const response = await fetch('https://api.notion.com/v1/pages', {
     method: 'POST',
     headers: {
@@ -418,7 +439,7 @@ async function createNotionPage(llmName, pageUrl, highlights, customTitle = null
           ]
         }
       },
-      children: children
+      children: firstBatch
     })
   });
 
@@ -428,6 +449,12 @@ async function createNotionPage(llmName, pageUrl, highlights, customTitle = null
   }
 
   const page = await response.json();
+
+  // Append remaining blocks in batches if needed
+  if (remainingBlocks.length > 0) {
+    await appendBlocksInBatches(page.id, remainingBlocks, config.apiKey);
+  }
+
   return page.url;
 }
 
