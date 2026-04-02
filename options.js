@@ -1,6 +1,7 @@
 // LLM Clipper - Options Page Script
 
 const form = document.getElementById('settingsForm');
+const readwiseTokenInput = document.getElementById('readwiseToken');
 const apiKeyInput = document.getElementById('notionApiKey');
 const parentPageIdInput = document.getElementById('notionParentPageId');
 const messageDiv = document.getElementById('message');
@@ -45,8 +46,28 @@ function cleanPageId(input) {
   return input.replace(/-/g, '').trim();
 }
 
+// Test Readwise connection
+async function testReadwiseConnection(token) {
+  try {
+    const response = await fetch('https://readwise.io/api/v2/auth/', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Token ${token}`
+      }
+    });
+
+    if (response.status === 204) {
+      return { success: true };
+    } else {
+      return { success: false, error: 'Invalid token' };
+    }
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
 // Test Notion connection
-async function testConnection(apiKey, parentPageId) {
+async function testNotionConnection(apiKey, parentPageId) {
   try {
     const response = await fetch(`https://api.notion.com/v1/pages/${parentPageId}`, {
       method: 'GET',
@@ -70,7 +91,11 @@ async function testConnection(apiKey, parentPageId) {
 
 // Load saved settings
 async function loadSettings() {
-  const result = await chrome.storage.sync.get(['notionApiKey', 'notionParentPageId']);
+  const result = await chrome.storage.sync.get(['readwiseToken', 'notionApiKey', 'notionParentPageId']);
+
+  if (result.readwiseToken) {
+    readwiseTokenInput.value = result.readwiseToken;
+  }
 
   if (result.notionApiKey) {
     apiKeyInput.value = result.notionApiKey;
@@ -82,8 +107,9 @@ async function loadSettings() {
 }
 
 // Save settings
-async function saveSettings(apiKey, parentPageId) {
+async function saveSettings(readwiseToken, apiKey, parentPageId) {
   await chrome.storage.sync.set({
+    readwiseToken: readwiseToken,
     notionApiKey: apiKey,
     notionParentPageId: parentPageId
   });
@@ -94,23 +120,28 @@ form.addEventListener('submit', async (e) => {
   e.preventDefault();
   hideMessage();
 
+  const readwiseToken = readwiseTokenInput.value.trim();
   const apiKey = apiKeyInput.value.trim();
   const parentPageId = cleanPageId(parentPageIdInput.value);
 
-  if (!apiKey) {
-    showMessage('Please enter your Notion API key', 'error');
+  // Need at least one service configured
+  if (!readwiseToken && !apiKey) {
+    showMessage('Please configure at least Readwise or Notion', 'error');
     return;
   }
 
-  if (!parentPageId) {
-    showMessage('Please enter a parent page ID', 'error');
+  // If Notion is partially configured, require both fields
+  if ((apiKey && !parentPageId) || (!apiKey && parentPageId)) {
+    showMessage('Notion requires both API key and parent page ID', 'error');
     return;
   }
 
   // Update the cleaned page ID in the input
-  parentPageIdInput.value = parentPageId;
+  if (parentPageId) {
+    parentPageIdInput.value = parentPageId;
+  }
 
-  await saveSettings(apiKey, parentPageId);
+  await saveSettings(readwiseToken, apiKey, parentPageId);
   showMessage('Settings saved successfully!', 'success');
 });
 
@@ -118,27 +149,45 @@ form.addEventListener('submit', async (e) => {
 testBtn.addEventListener('click', async () => {
   hideMessage();
 
+  const readwiseToken = readwiseTokenInput.value.trim();
   const apiKey = apiKeyInput.value.trim();
   const parentPageId = cleanPageId(parentPageIdInput.value);
 
-  if (!apiKey || !parentPageId) {
-    showMessage('Please enter both API key and page ID first', 'error');
+  if (!readwiseToken && !apiKey) {
+    showMessage('Please enter at least one service token first', 'error');
     return;
   }
 
   testBtn.textContent = 'Testing...';
   testBtn.disabled = true;
 
-  const result = await testConnection(apiKey, parentPageId);
+  const results = [];
+
+  // Test Readwise if configured
+  if (readwiseToken) {
+    const rwResult = await testReadwiseConnection(readwiseToken);
+    if (rwResult.success) {
+      results.push('Readwise: Connected');
+    } else {
+      results.push(`Readwise: ${rwResult.error}`);
+    }
+  }
+
+  // Test Notion if configured
+  if (apiKey && parentPageId) {
+    const notionResult = await testNotionConnection(apiKey, parentPageId);
+    if (notionResult.success) {
+      results.push(`Notion: Connected to "${notionResult.pageTitle}"`);
+    } else {
+      results.push(`Notion: ${notionResult.error}`);
+    }
+  }
 
   testBtn.textContent = 'Test Connection';
   testBtn.disabled = false;
 
-  if (result.success) {
-    showMessage(`Connected successfully! Page: "${result.pageTitle}"`, 'success');
-  } else {
-    showMessage(`Connection failed: ${result.error}`, 'error');
-  }
+  const allSuccess = results.every(r => r.includes('Connected'));
+  showMessage(results.join(' | '), allSuccess ? 'success' : 'error');
 });
 
 // Load settings on page load

@@ -1,13 +1,14 @@
 # LLM Clipper - Chrome Extension
 
-A Chrome extension for highlighting text on LLM chat sites (ChatGPT, Claude, Gemini) and exporting to Notion. Also supports sending any webpage to an LLM for analysis.
+A Chrome extension for highlighting text on LLM chat sites (ChatGPT, Claude, Gemini) and exporting to Readwise or Notion. Also supports sending any webpage to an LLM for analysis.
 
 ## Features
 
 1. **Highlight Mode**: Select text on LLM sites to capture highlights
 2. **Cross-Tab Highlighting**: Accumulate highlights across multiple chat windows
-3. **Notion Export**: Save highlights to new or existing Notion pages with fuzzy search
-4. **Read with LLM**: Send any webpage's content to ChatGPT, Claude, or Gemini for analysis
+3. **Readwise Export**: Send highlights directly to Readwise for review and retention
+4. **Notion Export**: Save highlights to new or existing Notion pages with fuzzy search
+5. **Read with LLM**: Send any webpage's content to ChatGPT, Claude, or Gemini for analysis
 
 ## Architecture
 
@@ -96,11 +97,12 @@ Messages between popup/content scripts and background:
 | `removeHighlights` | Remove multiple highlights by indices |
 | `getHighlights` | Get all stored highlights |
 | `getHighlightMode` | Check if highlight mode is active |
-| `toggleHighlightMode` | Toggle mode, export if has highlights |
+| `toggleHighlightMode` | Toggle mode, export to Notion if has highlights |
+| `exportToReadwise` | Export highlights to Readwise |
 | `cancelHighlightMode` | Cancel without exporting |
 | `searchPages` | Search Notion pages with query |
 | `getState` | Get current state |
-| `checkConfig` | Check if Notion is configured |
+| `checkConfig` | Check if Readwise/Notion configured (returns `{configured, readwise, notion}`) |
 | `setHighlightMode` | Sent to content script to activate/deactivate |
 | `showMessage` | Show toast in content script |
 | `getPageInfo` | Get LLM type and URL from content script |
@@ -137,8 +139,36 @@ Content extraction selectors (in order):
 ## Environment Variables
 
 Configured via options page, stored in `chrome.storage.sync`:
+- `readwiseToken` - Readwise access token (from readwise.io/access_token)
 - `notionApiKey` - Notion integration token
 - `notionParentPageId` - Parent page for new highlight pages
+
+## Readwise API Integration
+
+### Endpoint
+- `POST https://readwise.io/api/v2/highlights/`
+
+### Authentication
+- Header: `Authorization: Token ACCESS_TOKEN`
+
+### Request Format
+```json
+{
+  "highlights": [
+    {
+      "text": "highlight text",
+      "title": "Claude Chat",
+      "source_url": "https://claude.ai/chat/xxx",
+      "source_type": "llm_clipper",
+      "category": "articles",
+      "highlighted_at": "2024-01-01T12:00:00Z"
+    }
+  ]
+}
+```
+
+### Response
+- 200 OK with created highlight IDs
 
 ## Development Notes
 

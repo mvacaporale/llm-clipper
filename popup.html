@@ -326,6 +326,72 @@
       text-align: center;
       padding: 8px;
     }
+
+    /* Destination selector styles */
+    .destination-section {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .destination-section label {
+      font-size: 11px;
+      color: #666;
+      font-weight: 500;
+    }
+
+    .destination-buttons {
+      display: flex;
+      gap: 6px;
+    }
+
+    .dest-btn {
+      flex: 1;
+      padding: 8px 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #fff;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .dest-btn:hover {
+      border-color: #999;
+    }
+
+    .dest-btn.selected {
+      background: #333;
+      color: #fff;
+      border-color: #333;
+    }
+
+    /* Readwise button style */
+    .export-btn.readwise {
+      background: #ff5757;
+      color: #fff;
+    }
+
+    .export-btn.readwise:hover {
+      background: #e04545;
+    }
+
+    /* Export success styles */
+    .export-success {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px;
+      margin-bottom: 8px;
+      color: #059669;
+      font-weight: 500;
+    }
+
+    .success-icon {
+      font-size: 16px;
+    }
   </style>
 </head>
 <body>

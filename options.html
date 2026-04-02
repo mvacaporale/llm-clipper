@@ -213,9 +213,25 @@
 
     <form id="settingsForm">
       <div class="section">
-        <div class="section-title">Notion Configuration</div>
+        <div class="section-title">Readwise Configuration</div>
         <div class="section-description">
-          Connect LLM Clipper to your Notion workspace to save highlights.
+          Connect LLM Clipper to Readwise to save and review your highlights.
+        </div>
+
+        <div class="form-group">
+          <label for="readwiseToken">Readwise Access Token</label>
+          <input type="password" id="readwiseToken" placeholder="xxxxxxxxxxxxxxxx">
+          <div class="help-text">
+            Get your access token from
+            <a href="https://readwise.io/access_token" target="_blank">readwise.io/access_token</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Notion Configuration (Optional)</div>
+        <div class="section-description">
+          Alternatively, connect to Notion to save highlights as pages.
         </div>
 
         <div class="form-group">

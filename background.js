@@ -58,6 +58,14 @@ async function updateIcon(active) {
   await chrome.action.setIcon({ path: icons });
 }
 
+// Get Readwise configuration from storage
+async function getReadwiseConfig() {
+  const result = await chrome.storage.sync.get(['readwiseToken']);
+  return {
+    token: result.readwiseToken
+  };
+}
+
 // Get Notion configuration from storage
 async function getNotionConfig() {
   const result = await chrome.storage.sync.get(['notionApiKey', 'notionParentPageId']);
@@ -65,6 +73,50 @@ async function getNotionConfig() {
     apiKey: result.notionApiKey,
     parentPageId: result.notionParentPageId
   };
+}
+
+// Export highlights to Readwise
+async function exportToReadwise(highlights) {
+  const config = await getReadwiseConfig();
+
+  if (!config.token) {
+    throw new Error('Readwise not configured. Please add your access token in settings.');
+  }
+
+  // Group highlights by source
+  const groupedHighlights = groupHighlightsBySource(highlights);
+
+  // Build Readwise highlights array
+  const readwiseHighlights = [];
+
+  groupedHighlights.forEach(group => {
+    group.texts.forEach(text => {
+      readwiseHighlights.push({
+        text: text,
+        title: `${group.llm} Chat`,
+        source_url: group.url || undefined,
+        source_type: 'llm_clipper',
+        category: 'articles',
+        highlighted_at: new Date().toISOString()
+      });
+    });
+  });
+
+  const response = await fetch('https://readwise.io/api/v2/highlights/', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Token ${config.token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ highlights: readwiseHighlights })
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Readwise API error: ${error}`);
+  }
+
+  return { count: readwiseHighlights.length };
 }
 
 // Search Notion pages using the search API
@@ -665,10 +717,46 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case 'checkConfig':
       (async () => {
-        const config = await getNotionConfig();
+        const notionConfig = await getNotionConfig();
+        const readwiseConfig = await getReadwiseConfig();
+        const notionConfigured = !!(notionConfig.apiKey && notionConfig.parentPageId);
+        const readwiseConfigured = !!readwiseConfig.token;
         sendResponse({
-          configured: !!(config.apiKey && config.parentPageId)
+          configured: notionConfigured || readwiseConfigured,
+          notion: notionConfigured,
+          readwise: readwiseConfigured
         });
+      })();
+      return true; // Async response
+
+    case 'exportToReadwise':
+      (async () => {
+        await loadState();
+        if (state.highlights.length === 0) {
+          sendResponse({ status: 'error', message: 'No highlights to export' });
+          return;
+        }
+
+        try {
+          const result = await exportToReadwise(state.highlights);
+
+          // Reset state
+          state.highlightModeActive = false;
+          state.highlights = [];
+          await saveState();
+          await updateIcon(false);
+
+          // Notify content script
+          const tabId = message.tabId;
+          if (tabId) {
+            await sendToTab(tabId, { action: 'setHighlightMode', active: false });
+            await sendToTab(tabId, { action: 'exportComplete' });
+          }
+
+          sendResponse({ status: 'exported', count: result.count });
+        } catch (error) {
+          sendResponse({ status: 'error', message: error.message });
+        }
       })();
       return true; // Async response
 

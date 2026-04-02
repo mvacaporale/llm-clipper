@@ -26,6 +26,16 @@ function renderExported(notionUrl) {
   `;
 }
 
+function renderReadwiseExported(count) {
+  contentDiv.innerHTML = `
+    <div class="export-success">
+      <span class="success-icon">✓</span>
+      <span>${count} highlight${count !== 1 ? 's' : ''} sent to Readwise</span>
+    </div>
+    <a href="https://readwise.io/books" target="_blank" class="notion-link">Open Readwise</a>
+  `;
+}
+
 function renderError(message) {
   contentDiv.innerHTML = `<div class="error">${message}</div>`;
 }
@@ -41,10 +51,82 @@ function debounce(fn, delay) {
 
 // State for page selection
 let selectedPage = null; // { id, title, icon } or null for new page
+let configState = { readwise: false, notion: false }; // Available export destinations
 
-async function renderExportUI(highlightCount, tab) {
+async function renderExportUI(highlightCount, tab, config) {
   selectedPage = null; // Reset selection
+  configState = config;
 
+  // If only Readwise is configured, show simple Readwise export UI
+  if (config.readwise && !config.notion) {
+    contentDiv.innerHTML = `
+      <div class="export-ui">
+        <div class="highlight-count"><strong>${highlightCount}</strong> highlight${highlightCount !== 1 ? 's' : ''} ready</div>
+        <div class="export-buttons">
+          <button class="export-btn cancel" id="cancelBtn">Cancel</button>
+          <button class="export-btn save readwise" id="readwiseBtn">Send to Readwise</button>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('readwiseBtn').addEventListener('click', () => handleReadwiseExport(tab));
+    document.getElementById('cancelBtn').addEventListener('click', () => handleCancel(tab));
+    return;
+  }
+
+  // If both are configured, show destination choice first
+  if (config.readwise && config.notion) {
+    contentDiv.innerHTML = `
+      <div class="export-ui">
+        <div class="highlight-count"><strong>${highlightCount}</strong> highlight${highlightCount !== 1 ? 's' : ''} ready</div>
+        <div class="destination-section">
+          <label>Export to</label>
+          <div class="destination-buttons">
+            <button class="dest-btn selected" id="destReadwise" data-dest="readwise">Readwise</button>
+            <button class="dest-btn" id="destNotion" data-dest="notion">Notion</button>
+          </div>
+        </div>
+        <div id="exportOptions"></div>
+        <div class="export-buttons">
+          <button class="export-btn cancel" id="cancelBtn">Cancel</button>
+          <button class="export-btn save" id="saveBtn">Export</button>
+        </div>
+      </div>
+    `;
+
+    const exportOptions = document.getElementById('exportOptions');
+    const destReadwise = document.getElementById('destReadwise');
+    const destNotion = document.getElementById('destNotion');
+    let selectedDest = 'readwise';
+
+    function updateDestination(dest) {
+      selectedDest = dest;
+      destReadwise.classList.toggle('selected', dest === 'readwise');
+      destNotion.classList.toggle('selected', dest === 'notion');
+
+      if (dest === 'readwise') {
+        exportOptions.innerHTML = '';
+      } else {
+        renderNotionOptions(exportOptions);
+      }
+    }
+
+    destReadwise.addEventListener('click', () => updateDestination('readwise'));
+    destNotion.addEventListener('click', () => updateDestination('notion'));
+
+    document.getElementById('saveBtn').addEventListener('click', () => {
+      if (selectedDest === 'readwise') {
+        handleReadwiseExport(tab);
+      } else {
+        doNotionExport(tab);
+      }
+    });
+
+    document.getElementById('cancelBtn').addEventListener('click', () => handleCancel(tab));
+    return;
+  }
+
+  // Only Notion configured - show original Notion UI
   contentDiv.innerHTML = `
     <div class="export-ui">
       <div class="highlight-count"><strong>${highlightCount}</strong> highlight${highlightCount !== 1 ? 's' : ''} ready</div>
@@ -65,13 +147,31 @@ async function renderExportUI(highlightCount, tab) {
     </div>
   `;
 
+  setupNotionUI(tab);
+}
+
+function renderNotionOptions(container) {
+  container.innerHTML = `
+    <div class="page-search-section">
+      <label>Save to</label>
+      <div id="selectionDisplay"></div>
+      <input type="text" class="page-search-input" placeholder="Search pages or create new..." id="pageSearchInput">
+      <div class="page-results" id="pageResults"></div>
+    </div>
+    <div class="new-page-section" id="newPageSection">
+      <label>Page name</label>
+      <input type="text" class="page-name-input" placeholder="Optional - uses default if empty" id="pageNameInput">
+    </div>
+  `;
+  setupNotionSearchUI();
+}
+
+function setupNotionSearchUI() {
   const pageSearchInput = document.getElementById('pageSearchInput');
   const pageResults = document.getElementById('pageResults');
   const selectionDisplay = document.getElementById('selectionDisplay');
   const newPageSection = document.getElementById('newPageSection');
   const pageNameInput = document.getElementById('pageNameInput');
-  const saveBtn = document.getElementById('saveBtn');
-  const cancelBtn = document.getElementById('cancelBtn');
 
   // Update the selection display
   function updateSelectionDisplay() {
@@ -173,29 +273,62 @@ async function renderExportUI(highlightCount, tab) {
     }
   });
 
+  // Initial display
+  updateSelectionDisplay();
+}
+
+function setupNotionUI(tab) {
+  setupNotionSearchUI();
+
+  const pageNameInput = document.getElementById('pageNameInput');
+  const saveBtn = document.getElementById('saveBtn');
+  const cancelBtn = document.getElementById('cancelBtn');
+
   // Handle Enter in page name input
   pageNameInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
-      doExport();
+      doNotionExport(tab);
     }
   });
 
-  function doExport() {
-    if (selectedPage) {
-      handleExport(tab, null, selectedPage.id);
-    } else {
-      handleExport(tab, pageNameInput.value.trim(), 'new');
-    }
+  saveBtn.addEventListener('click', () => doNotionExport(tab));
+  cancelBtn.addEventListener('click', () => handleCancel(tab));
+}
+
+function doNotionExport(tab) {
+  const pageNameInput = document.getElementById('pageNameInput');
+  if (selectedPage) {
+    handleExport(tab, null, selectedPage.id);
+  } else {
+    handleExport(tab, pageNameInput?.value?.trim() || '', 'new');
+  }
+}
+
+async function handleReadwiseExport(tab) {
+  const saveBtn = document.getElementById('saveBtn') || document.getElementById('readwiseBtn');
+  const cancelBtn = document.getElementById('cancelBtn');
+
+  // Disable buttons and show loading
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<div class="spinner" style="width:12px;height:12px;border-width:2px;"></div>';
+  }
+  if (cancelBtn) {
+    cancelBtn.disabled = true;
   }
 
-  saveBtn.addEventListener('click', doExport);
-
-  cancelBtn.addEventListener('click', () => {
-    handleCancel(tab);
+  const result = await new Promise(resolve => {
+    chrome.runtime.sendMessage({
+      action: 'exportToReadwise',
+      tabId: tab.id
+    }, resolve);
   });
 
-  // Initial display
-  updateSelectionDisplay();
+  if (result?.status === 'exported') {
+    renderReadwiseExported(result.count);
+  } else if (result?.status === 'error') {
+    renderError(result.message);
+  }
 }
 
 async function handleExport(tab, pageName, targetPageId) {
@@ -520,8 +653,11 @@ async function init() {
   });
 
   if (stateResponse?.active && stateResponse?.highlightCount > 0) {
-    // Has highlights - show export UI with page selector
-    await renderExportUI(stateResponse.highlightCount, tab);
+    // Has highlights - show export UI with destination selector
+    await renderExportUI(stateResponse.highlightCount, tab, {
+      readwise: configResponse.readwise,
+      notion: configResponse.notion
+    });
   } else if (stateResponse?.active) {
     // Active but no highlights
     renderStatus('No highlights yet');
