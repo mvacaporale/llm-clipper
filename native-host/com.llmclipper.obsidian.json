@@ -1,0 +1,9 @@
+{
+  "name": "com.llmclipper.obsidian",
+  "description": "LLM Clipper Obsidian Native Host - writes highlights to Obsidian vault",
+  "path": "/Users/michaelangelocaporale/Documents/Projects/claude/llm-clipper/native-host/obsidian-clipper-host.js",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://EXTENSION_ID_PLACEHOLDER/"
+  ]
+}
